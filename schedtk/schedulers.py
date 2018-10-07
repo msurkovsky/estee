@@ -128,6 +128,30 @@ class BlevelGtScheduler(GreedyTransferQueueScheduler):
         return tasks
 
 
+class XScheduler(SchedulerBase):
+
+    def init(self, simulator):
+        super().init(simulator)
+        independencies = compute_independent_tasks(simulator.task_graph)
+        workers = self.simulator.workers
+        placement = {}
+        for task in simulator.task_graph.tasks:
+            placement[task] = workers[0]
+        print(placement_cost(placement, self.independencies))
+
+    def placement_cost(self, placement, independencies):
+        cost = 0
+        bandwidth = self.simulator.connector.bandwitdth
+        for task, worker in placement.items():
+            for t in independencies[task]:
+                if placement[t] == worker:
+                    cost += t.duration
+            for t in task.inputs:
+                if placement[t] != worker:
+                    cost += t.size / bandwidth
+        return cost
+
+
 def assign_b_level(task_graph, cost_fn):
     for task in task_graph.tasks:
         task.s_info = cost_fn(task)
@@ -146,3 +170,36 @@ def graph_dist_crawl(initial_tasks, nexts_fn, cost_fn):
                     t.s_info = new_value
                     new_tasks.add(t)
         tasks = new_tasks
+
+
+def graph_crawl(initial_tasks, nexts_fn, value_fn):
+    values = {}
+
+    def compute(state):
+        v = values.get(state)
+        if v is not None:
+            return v
+        v = value_fn([compute(s) for s in nexts_fn(state)])
+        values[state] = v
+        return v
+
+    for state in initial_tasks:
+        compute(state)
+
+    return values
+
+
+def compute_independent_tasks(task_graph):
+    def union(values):
+        if not values:
+            return frozenset()
+        else:
+            return frozenset(*values)
+
+    tasks = frozenset(task_graph.tasks)
+    up_deps = graph_crawl(task_graph.leaf_nodes(), lambda t: t.inputs, union)
+    down_deps = graph_crawl(task_graph.source_tasks(), lambda t: t.consumers, union)
+    for state in up_deps:
+        up_deps[state] = tasks.difference(up_deps[state] | down_deps[state])
+
+    return up_deps
