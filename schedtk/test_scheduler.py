@@ -1,5 +1,6 @@
 
-from .schedulers import AllOnOneScheduler, RandomScheduler, RandomGtScheduler, BlevelGtScheduler, RandomAssignScheduler
+from .schedulers import AllOnOneScheduler, RandomScheduler, RandomGtScheduler, BlevelGtScheduler, RandomAssignScheduler, SchedulerX
+from .schedulers import compute_independent_tasks
 from .connectors import SimpleConnector
 
 from .test_utils import do_sched_test
@@ -56,6 +57,22 @@ def test_scheduler_random_assign(plan1):
     for _ in range(50):
         assert 10 <= do_sched_test(plan1, 2, RandomAssignScheduler(), SimpleConnector()) <= 22
         assert 9 <= do_sched_test(plan1, 3, RandomAssignScheduler(), SimpleConnector()) <= 22
+
+
+def test_scheduler_x(plan1):
+    for _ in range(1):
+        do_sched_test(plan1, 2, SchedulerX(), SimpleConnector()) <= 22
+
+
+def test_compute_indepndent_tasks(plan1):
+    it = compute_independent_tasks(plan1)
+    a1, a2, a3, a4, a5, a6, a7, a8 = plan1.tasks
+    assert it[a1] == frozenset((a2, a4, a6, a7))
+    assert it[a2] == frozenset((a1, a3, a4, a6, a7))
+    assert it[a3] == frozenset((a2, a4, a6, a7))
+    assert it[a5] == frozenset((a6, a7))
+    assert it[a7] == frozenset((a1, a2, a3, a4, a5, a6))
+    assert it[a8] == frozenset()
 
 """
 def test_xxx(plan1):

@@ -128,34 +128,44 @@ class BlevelGtScheduler(GreedyTransferQueueScheduler):
         return tasks
 
 
-class XScheduler(SchedulerBase):
+class SchedulerX(SchedulerBase):
 
     def init(self, simulator):
         super().init(simulator)
         independencies = compute_independent_tasks(simulator.task_graph)
+        tab = []
+        costs = []
+        bandwidth = self.simulator.connector.bandwitdth
+        for task, indeps in independencies.items():
+            for t in task.inputs:
+                tab.append((t.id, task.id))
+                costs.append(-t.size / bandwidth)
+            for t in indeps:
+                tab.append((t.id, task.id))
+                costs.append(t.duration + task.duration)
+        self.tab = np.array(tab, dtype=np.int32)
+        self.costs = np.array(costs)
+
+        """
         workers = self.simulator.workers
         placement = {}
         for task in simulator.task_graph.tasks:
             placement[task] = workers[0]
-        print(placement_cost(placement, self.independencies))
+        """
+        placement = np.zeros(self.simulator.task_graph.task_count)
+        print(self.placement_cost(placement))
 
-    def placement_cost(self, placement, independencies):
-        cost = 0
-        bandwidth = self.simulator.connector.bandwitdth
-        for task, worker in placement.items():
-            for t in independencies[task]:
-                if placement[t] == worker:
-                    cost += t.duration
-            for t in task.inputs:
-                if placement[t] != worker:
-                    cost += t.size / bandwidth
-        return cost
+    def placement_cost(self, placement):
+        print(self.tab)
+        a = placement[self.tab[:, 0]]
+        b = placement[self.tab[:, 1]]
+        return (self.costs * (a == b)).sum()
 
 
 def assign_b_level(task_graph, cost_fn):
     for task in task_graph.tasks:
         task.s_info = cost_fn(task)
-    graph_dist_crawl(task_graph.leaf_nodes(), lambda t: t.inputs, cost_fn)
+    graph_dist_crawl(task_graph.leaf_tasks(), lambda t: t.inputs, cost_fn)
 
 
 def graph_dist_crawl(initial_tasks, nexts_fn, cost_fn):
@@ -179,27 +189,23 @@ def graph_crawl(initial_tasks, nexts_fn, value_fn):
         v = values.get(state)
         if v is not None:
             return v
-        v = value_fn([compute(s) for s in nexts_fn(state)])
+        v = value_fn(state, [compute(s) for s in nexts_fn(state)])
         values[state] = v
         return v
 
     for state in initial_tasks:
         compute(state)
-
     return values
 
 
 def compute_independent_tasks(task_graph):
-    def union(values):
-        if not values:
-            return frozenset()
-        else:
-            return frozenset(*values)
+    def union(state, values):
+        values.append(frozenset((state,)))
+        return frozenset.union(*values)
 
     tasks = frozenset(task_graph.tasks)
-    up_deps = graph_crawl(task_graph.leaf_nodes(), lambda t: t.inputs, union)
+    up_deps = graph_crawl(task_graph.leaf_tasks(), lambda t: t.inputs, union)
     down_deps = graph_crawl(task_graph.source_tasks(), lambda t: t.consumers, union)
-    for state in up_deps:
-        up_deps[state] = tasks.difference(up_deps[state] | down_deps[state])
-
-    return up_deps
+    print(down_deps)
+    return {task: tasks.difference(up_deps[task] | down_deps[task])
+            for task in task_graph.tasks}
