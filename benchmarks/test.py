@@ -6,6 +6,7 @@ import numpy as np
 from schedtk import Worker, Simulator
 from schedtk.connectors import SimpleConnector
 from schedtk.schedulers import AllOnOneScheduler
+from schedtk.schedulers import MartinsScheduler
 
 
 def run_single_instance(task_graph, n_workers, scheduler, bandwidth):
@@ -25,7 +26,8 @@ def benchmark_scheduler(task_graph, scheduler_class, n_workers, bandwidth, count
 def main():
     data = pd.read_pickle("dataset1.xz")
     count = 1
-    scheduler = AllOnOneScheduler
+    # scheduler = AllOnOneScheduler
+    scheduler = MartinsScheduler
 
     results = []
     for i, row in data.iterrows():

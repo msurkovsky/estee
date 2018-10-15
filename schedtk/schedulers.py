@@ -146,3 +146,22 @@ def graph_dist_crawl(initial_tasks, nexts_fn, cost_fn):
                     t.s_info = new_value
                     new_tasks.add(t)
         tasks = new_tasks
+
+
+class MartinsScheduler(SchedulerBase):
+
+    def init(self, simulator):
+        super().init(simulator)
+        self.scheduled = False
+
+    def schedule(self, new_ready, new_finised):
+        if self.scheduled:
+            return ()
+        self.scheduled = True
+
+        tasks = list(self.simulator.task_graph.tasks)
+        tasks.sort(key=lambda t: t.size, reverse=True)
+
+        workers = self.simulator.workers
+
+        return [(workers[i % len(workers)], tasks[i]) for i in range(len(tasks))]
